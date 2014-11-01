@@ -1,0 +1,6 @@
+ipch
+temp
+*.opensdf
+*.sdf
+*.ilk
+*.pdb
