@@ -14,6 +14,7 @@ public:
 private:
     
     size_t size;
+    size_t weight;
     std::list<size_t> m_prevs, m_nexts;
 };
 

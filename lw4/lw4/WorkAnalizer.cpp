@@ -90,6 +90,11 @@ bool CWorkAnalizer::InitStartPoint(size_t & startPoint)
     return false;    
 }
 
+bool CWorkAnalizer::InitEndPoint(size_t & endPoint)
+{
+
+}
+
 bool CWorkAnalizer::ReadOperations(string const& operationsSizes)
 {
     istringstream operationStrm(operationsSizes);

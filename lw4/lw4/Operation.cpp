@@ -4,6 +4,7 @@
 
 COperation::COperation(size_t size)
     :size( size )
+    ,weight( 0 )
 {
 }
 

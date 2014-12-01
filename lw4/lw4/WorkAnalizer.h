@@ -35,6 +35,11 @@ private:
     bool ReadLink(std::string const& linkString);
 
     bool InitStartPoint(size_t & startPoint);
+    bool InitEndPoint(size_t & endPoint);
+    bool InitPoint(size_t & endPoint);
+
+
+    void InitOperationsWeight();
 
 };
 
