@@ -16,6 +16,6 @@
 #include <sstream>
 #include <vector>
 #include <list>
-
+#include <functional>
 
 // TODO: reference additional headers your program requires here

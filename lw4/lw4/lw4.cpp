@@ -12,6 +12,9 @@ int main(int argc, char* argv[])
 
     std::vector<size_t> way;
     analizer.GetWay(way);
-
+    for (auto id : way)
+    {
+        std::cout << id << ' ';
+    }
 	return 0;
 }

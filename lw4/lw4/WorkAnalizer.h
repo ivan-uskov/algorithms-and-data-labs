@@ -28,7 +28,7 @@ private:
     Error m_error;
     size_t m_operationsCount;
     std::vector<COperation> m_operations;
-    CReversSortedList m_availeble;    
+    std::list<size_t> m_availeble;    
     
     bool ReadOperations(std::string const& operationsSizes);
     bool ReadLinks(std::istream & input);
@@ -36,10 +36,12 @@ private:
 
     bool InitStartPoint(size_t & startPoint);
     bool InitEndPoint(size_t & endPoint);
-    bool InitPoint(size_t & endPoint);
+    bool InitPoint(size_t & endPoint, std::function<bool(COperation)> fn);
 
+    size_t GetMaxAvaileble()const;
+    void DeleteFromAvaileble(size_t id);
 
-    void InitOperationsWeight();
+    void InitOperationsWeight(size_t id, size_t weight);
 
 };
 

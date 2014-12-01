@@ -11,11 +11,24 @@ CWorkAnalizer::CWorkAnalizer(istream & input)
     getline(input, buff);
 
     ReadOperations(buff);
-    if (!IsError())
-    {
-        m_operationsCount = m_operations.size();
-        ReadLinks(input);
+    if (IsError())
+    {        
+        return;
     }
+
+    m_operationsCount = m_operations.size();
+    ReadLinks(input);
+
+    size_t endPoint;
+    if (!InitEndPoint(endPoint))
+    {
+        m_error = Error::InvalidGraph;
+    }
+    else
+    {
+        InitOperationsWeight(endPoint, 0);
+    }
+    
 }
 
 
@@ -30,17 +43,22 @@ bool CWorkAnalizer::GetWay(std::vector<size_t> & way)
 {
     way.clear();
     size_t startPoint;
-    if (InitStartPoint(startPoint))
+    if (!InitStartPoint(startPoint))
     {
-        way.push_back(startPoint);
-        for (auto id : m_operations[startPoint].GetNexts())
-        {
-            m_availeble.Insert(id);
-        }
+        return false;        
     }
-    while (m_availeble.Size() > 0)
-    {
 
+    m_availeble.push_back(startPoint);
+
+    while (m_availeble.size() > 0)
+    {
+        auto newMax = GetMaxAvaileble();
+        way.push_back(newMax);
+        for (auto id : m_operations[newMax].GetNexts())
+        {
+            m_availeble.push_back(id);
+        }
+        DeleteFromAvaileble(newMax);
     }
     return true;
 }
@@ -74,25 +92,61 @@ bool CWorkAnalizer::IsError()const
 
 /* Private methods */
 
+void CWorkAnalizer::DeleteFromAvaileble(size_t id)
+{
+    auto it = find_if(m_availeble.begin(), m_availeble.end(), [id](size_t i){ return i == id; });
+    if (it != m_availeble.end())
+    {
+        m_availeble.erase(it);
+    }
+}
+
+size_t CWorkAnalizer::GetMaxAvaileble()const
+{
+    size_t max = m_availeble.front();
+
+    auto IfMax = [max](size_t i) 
+    {
+        return i > max;
+    };
+    auto it = find_if(m_availeble.begin(), m_availeble.end(), IfMax);
+
+    if (it != m_availeble.end())
+    {
+        max = *it;
+    }
+    return max;
+}
+
 bool CWorkAnalizer::InitStartPoint(size_t & startPoint)
 {
-    auto IsOperUndependent = [](COperation oper){
+    auto IsOperUndependent = [](COperation oper)
+    {
         return oper.IsUndependent();
     };
-    auto startPointIt = find_if(m_operations.begin(), m_operations.end(), IsOperUndependent);
-
-    if (startPointIt < m_operations.end())
-    {
-        startPoint = startPointIt - m_operations.begin();
-        return true;
-    }
-
-    return false;    
+    
+    return InitPoint(startPoint, IsOperUndependent);
 }
 
 bool CWorkAnalizer::InitEndPoint(size_t & endPoint)
 {
+    auto IsOperLast = [](COperation oper)
+    {
+        return oper.IsLast();
+    };
+  
+    return InitPoint(endPoint, IsOperLast);
+}
 
+bool CWorkAnalizer::InitPoint(size_t & point, std::function<bool(COperation)> fn)
+{
+    auto pointIt = find_if(m_operations.begin(), m_operations.end(), fn);
+    if (pointIt < m_operations.end())
+    {
+        point = pointIt - m_operations.begin();
+        return true;
+    }
+    return false;
 }
 
 bool CWorkAnalizer::ReadOperations(string const& operationsSizes)
@@ -138,4 +192,22 @@ bool CWorkAnalizer::ReadLink(std::string const& linkString)
         return true;
     }
     return false;
+}
+
+void CWorkAnalizer::InitOperationsWeight(size_t id, size_t weight)
+{
+    COperation * curr = &(m_operations[id]);
+    auto newWeight = weight + curr->GetSize();
+    auto oldWeight = curr->GetWight();
+    if (oldWeight < newWeight)
+    {
+        curr->SetWight(newWeight);
+        oldWeight = newWeight;
+    }
+    
+    auto prevs = curr->GetPrevs();
+    for (auto it = prevs.begin(); it != prevs.end(); ++it)
+    {
+        InitOperationsWeight(*it, oldWeight);
+    }
 }
