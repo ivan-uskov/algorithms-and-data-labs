@@ -5,30 +5,15 @@ using namespace std;
 
 
 CWorkAnalizer::CWorkAnalizer(istream & input)
-    :m_error( Error::None )
 {
-    string buff;
-    getline(input, buff);
-
-    ReadOperations(buff);
-    if (IsError())
-    {        
-        return;
-    }
+    size_t operationsCount = ReadOperationCount(input);
+    ReadOperations(input, operationsCount);
 
     m_operationsCount = m_operations.size();
     ReadLinks(input);
 
-    size_t endPoint;
-    if (!InitEndPoint(endPoint))
-    {
-        m_error = Error::InvalidGraph;
-    }
-    else
-    {
-        InitOperationsWeight(endPoint, 0);
-    }
-    
+    size_t endPoint = GetEndPoint();
+    InitOperationsWeight(endPoint);
 }
 
 
@@ -39,60 +24,79 @@ CWorkAnalizer::~CWorkAnalizer()
 
 /* Public methods */
 
-bool CWorkAnalizer::GetWay(std::vector<size_t> & way)
+CWorkAnalizer::WorkProcess CWorkAnalizer::GetProcess()
 {
-    way.clear();
-    size_t startPoint;
-    if (!InitStartPoint(startPoint))
-    {
-        return false;        
-    }
-
+    WorkProcess process;
+    size_t startPoint = GetStartPoint();
     m_availeble.push_back(startPoint);
+    auto timeline = GetTimeLine();
 
     while (m_availeble.size() > 0)
     {
-        auto newMax = GetMaxAvaileble();
-        way.push_back(newMax);
-        for (auto id : m_operations[newMax].GetNexts())
+        auto newMax = GetMaxAvailebles();
+        size_t id = newMax.front();
+
+        COperation * currentOp = &m_operations[id];
+        const string type(currentOp->GetType());
+
+        currentOp->SetExecutionTime(timeline[type]);
+        timeline[type] += currentOp->GetTime();
+        process[type].push_back(*currentOp);
+        EraseFromAvaileble(id);
+        EraseFromChilds(id);
+
+        auto & opers = m_operations;
+        for (auto it = timeline.begin(); it != timeline.end(); ++it)
         {
-            m_availeble.push_back(id);
+            auto ite = find_if(newMax.begin(), newMax.end(), [it, &opers](size_t item){ return it->first == opers[item].GetType(); });
+            if (newMax.end() == ite)
+            {
+                it->second = timeline[type];
+            }
         }
-        DeleteFromAvaileble(newMax);
+
+        auto nexts = currentOp->GetNexts();
+        copy_if(nexts.begin(), nexts.end(), back_inserter(m_availeble), [&opers](size_t id){ return opers[id].IsUndependent(); });
+        m_availeble.unique();
     }
-    return true;
+    return process;
 }
 
-void CWorkAnalizer::PrintError()const
+size_t CWorkAnalizer::ReadOperationCount(istream & input)
 {
-    switch (m_error)
+    string buff;
+    getline(input, buff);
+    size_t operationsCount;
+
+    if (!(istringstream(buff) >> operationsCount))
     {
-        case Error::ParseLinks:
-        {
-            cout << "Error in parse links" << endl;
-            break;
-        }
-        case Error::ParseOperationSizes:
-        {
-            cout << "Error in parse sizes" << endl;
-            break;
-        }
-        case Error::InvalidGraph:
-        {
-            cout << "Invalid graph" << endl;
-            break;
-        }
+        throw exception("Can't read operatons count!");
     }
-}
 
-bool CWorkAnalizer::IsError()const
-{
-    return m_error != Error::None;
+    return operationsCount;
 }
 
 /* Private methods */
 
-void CWorkAnalizer::DeleteFromAvaileble(size_t id)
+void CWorkAnalizer::EraseFromChilds(size_t id)
+{
+    for (auto elt : m_operations[id].GetNexts())
+    {
+        m_operations[elt].ErasePrev(id);
+    }
+}
+
+map<string, size_t> CWorkAnalizer::GetTimeLine()const
+{
+    map<string, size_t> timeline;
+    for (auto operation : m_operations)
+    {
+        timeline[operation.GetType()] = 0;
+    }
+    return timeline;
+}
+
+void CWorkAnalizer::EraseFromAvaileble(size_t id)
 {
     auto it = find_if(m_availeble.begin(), m_availeble.end(), [id](size_t i){ return i == id; });
     if (it != m_availeble.end())
@@ -101,110 +105,152 @@ void CWorkAnalizer::DeleteFromAvaileble(size_t id)
     }
 }
 
-size_t CWorkAnalizer::GetMaxAvaileble()const
+list<size_t> CWorkAnalizer::GetMaxAvailebles()const
 {
-    size_t max = m_availeble.front();
+    list<size_t> max;
 
-    auto IfMax = [max](size_t i) 
+    for (auto id : m_availeble)
     {
-        return i > max;
-    };
-    auto it = find_if(m_availeble.begin(), m_availeble.end(), IfMax);
-
-    if (it != m_availeble.end())
-    {
-        max = *it;
+        auto currAv = m_operations[id];
+        bool isTypeExists = false;
+        for (auto it = max.begin(); it != max.end(); ++it)
+        {
+            auto currM = m_operations[*it];
+            if (currAv.GetType() == currM.GetType())
+            {
+                isTypeExists = true;
+                if (currAv.GetWight() > currM.GetWight())
+                {
+                    *it = id;
+                }
+            }
+        }
+        if (!isTypeExists)
+        {
+            max.push_back(id);
+        }
     }
+    max.sort();
+
     return max;
 }
 
-bool CWorkAnalizer::InitStartPoint(size_t & startPoint)
+size_t CWorkAnalizer::GetStartPoint()
 {
     auto IsOperUndependent = [](COperation oper)
     {
         return oper.IsUndependent();
     };
     
-    return InitPoint(startPoint, IsOperUndependent);
+    return GetPoint(IsOperUndependent);
 }
 
-bool CWorkAnalizer::InitEndPoint(size_t & endPoint)
+size_t CWorkAnalizer::GetEndPoint()
 {
     auto IsOperLast = [](COperation oper)
     {
         return oper.IsLast();
     };
-  
-    return InitPoint(endPoint, IsOperLast);
+
+    return GetPoint(IsOperLast);
 }
 
-bool CWorkAnalizer::InitPoint(size_t & point, std::function<bool(COperation)> fn)
+size_t CWorkAnalizer::GetPoint(std::function<bool(COperation)> fn)
 {
     auto pointIt = find_if(m_operations.begin(), m_operations.end(), fn);
-    if (pointIt < m_operations.end())
+    if (pointIt == m_operations.end())
     {
-        point = pointIt - m_operations.begin();
-        return true;
+        throw exception("Cant init border point");
     }
-    return false;
+
+    return pointIt - m_operations.begin();
 }
 
-bool CWorkAnalizer::ReadOperations(string const& operationsSizes)
+void CWorkAnalizer::ReadOperations(istream & input, size_t operationsCount)
 {
-    istringstream operationStrm(operationsSizes);
-    size_t size;
-    while (operationStrm >> size)
+    string buff;
+    while (operationsCount-- > 0)
     {
-        m_operations.push_back(COperation(size));
+        getline(input, buff);
+        ReadOperation(buff);
     }
 
     if (m_operations.empty())
     {
-        m_error = Error::ParseOperationSizes;
-        return false;
+        throw exception("Has no operations!");
     }
-    return true;
 }
 
-bool CWorkAnalizer::ReadLinks(istream & input)
+void CWorkAnalizer::ReadOperation(std::string const& operationStr)
+{
+    size_t id, size;
+    string type;
+
+    if (!(istringstream(operationStr) >> id >> size >> type))
+    {
+        throw exception(("Error parse operation: " + operationStr).c_str());
+    }
+
+    m_operations.push_back(COperation(id, size, type));
+}
+
+void CWorkAnalizer::ReadLinks(istream & input)
 {
     string buff;
     while (input.peek() != EOF)
     {
         getline(input, buff);
-        if (!ReadLink(buff))
-        {
-            m_error = Error::ParseLinks;
-            return false;
-        }
+        ReadLink(buff);
     }
-    return true;
 }
 
-bool CWorkAnalizer::ReadLink(std::string const& linkString)
+void CWorkAnalizer::ReadLink(std::string const& linkString)
 {
     size_t from, to;
-    istringstream linkStrm(linkString);
-    if (linkStrm >> from >> to && from < m_operationsCount && to < m_operationsCount)
+
+    try
     {
-        m_operations[from].AddNext(to);
-        m_operations[to].AddPrev(from);
-        return true;
+        if (!(istringstream(linkString) >> from >> to))
+        {
+            throw exception("");
+        }
+
+        size_t fromId = GetOperationById(from);
+        size_t toId = GetOperationById(to);
+        m_operations[fromId].AddNext(toId);
+        m_operations[toId].AddPrev(fromId);
     }
-    return false;
+    catch (exception const& e)
+    {
+        throw exception(("Error parse link: " + linkString).c_str());
+    }
+}
+
+size_t CWorkAnalizer::GetOperationById(size_t id)
+{
+    auto it = find_if(m_operations.begin(), m_operations.end(), [id](COperation & oper){
+        return (oper.GetId() == id);
+    });
+
+    if (it == m_operations.end())
+    {
+        throw exception("");
+    }
+    return it - m_operations.begin();
 }
 
 void CWorkAnalizer::InitOperationsWeight(size_t id, size_t weight)
 {
     COperation * curr = &(m_operations[id]);
-    auto newWeight = weight + curr->GetSize();
     auto oldWeight = curr->GetWight();
+    auto newWeight = weight + curr->GetTime();
+
     if (oldWeight < newWeight)
     {
         curr->SetWight(newWeight);
         oldWeight = newWeight;
     }
-    
+
     auto prevs = curr->GetPrevs();
     for (auto it = prevs.begin(); it != prevs.end(); ++it)
     {
