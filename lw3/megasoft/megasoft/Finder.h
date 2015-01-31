@@ -17,6 +17,7 @@ private:
     
     std::map<size_t, std::vector<size_t>> m_points;
 
-    void InitLeafs(std::queue<size_t> leafs);
+    void InitLeafs(std::queue<size_t> & leafs);
+    void DeleteLink(size_t id, size_t linkId);
 };
 

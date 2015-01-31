@@ -33,6 +33,6 @@ int main(int argc, char* argv[])
         PrintCenter(finder.GetCenter());
     }
 
-	return 0;
+    return 0;
 }
 
