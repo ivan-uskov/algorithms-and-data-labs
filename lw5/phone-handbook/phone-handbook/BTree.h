@@ -19,25 +19,26 @@ public:
     CBTree(Uint count);
     ~CBTree();
 
-    bool Search(Uint key);
-    void Insert(Uint key, Uint id);
+    Uint Search(Uint const key);
+    void Insert(Uint const key, Uint const id);
 
 private:
 
     struct Page
     {
         Uint home;
+        Uint pos;
         std::list<Uint> values;
     };
 
     Uint m_root;
     Uint m_pageCount;
-    Uint m_pageSize;
     Uint m_chunkCount;
-    
+
     boost::filesystem::path m_treeBoostPath;
 
-    Uint WritePage(Page const& page);
+    Uint WritePage(Page const& page, bool isNew = true);
     Page ReadPage(Uint const& pos);
-
+    void InsertVal(Page & page, std::list<Uint>::iterator const& it, Uint const key, Uint const id);
+    void SplitPage(Page & sourse, Page & res1, Page & res2);
 };

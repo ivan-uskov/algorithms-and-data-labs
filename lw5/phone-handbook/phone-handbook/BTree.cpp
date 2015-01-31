@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "BTree.h"
 
-
 using namespace std;
 
 void MyAssert(bool is, const char * str);
@@ -9,46 +8,123 @@ void MyAssert(bool is, const char * str);
 CBTree::CBTree(Uint count)
     : m_pageCount(count)
     , m_root(0)
-    , m_chunkCount(count * 3 + 3)
-    , m_pageSize(m_chunkCount  * sizeof(Uint))
+    , m_chunkCount(count * 3 + 1)
 {
     m_treeBoostPath = boost::filesystem::unique_path();
-    ofstream(m_treeBoostPath.string()) << "Start\n";
+    ofstream(m_treeBoostPath.string()) << "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF";
 }
 
 CBTree::~CBTree()
 {
-    //boost::filesystem::remove(m_treeBoostPath);
+    boost::filesystem::remove(m_treeBoostPath);
 }
 
 /* Public methods */
 
-void CBTree::Insert(Uint key, Uint id)
+void CBTree::Insert(Uint const key, Uint const id)
 {
-    Page page({ 4, {0,2,3,0} });
-    Uint a = WritePage(page);
+    if (m_root == 0)
+    {
+        Page page = { 0, 0, { 0, key, id, 0 } };
+        m_root = WritePage(page);
+        return;
+    }
 
-    Page p = ReadPage(a);
-    MyAssert(p.home == 4 && p.values == list<Uint>({ 0, 2, 3, 0 }), "Ololo");
+    Page page = ReadPage(m_root);
+    auto it = page.values.begin();
+
+    while (1)
+    {
+        Uint link = *it++;
+        Uint cKey = *it++;
+        Uint cVal = *it;
+
+        if (key < cKey)
+        {
+            --(--it);
+            if (*it != 0)
+            {
+                page = ReadPage(*it);
+                it = page.values.begin();
+                continue;
+            }
+
+            InsertVal(page, it, key, id);
+            return;
+        }
+
+        ++(++it);
+        if (it == page.values.end())
+        {
+            --it;
+            if (*it != 0)
+            {
+                page = ReadPage(*it);
+                it = page.values.begin();
+                continue;
+            }
+
+            InsertVal(page, it, key, id);
+            return;
+        }
+        else
+        {
+            --it;
+        }
+    }
 }
 
-bool CBTree::Search(Uint key)
+Uint CBTree::Search(Uint const key)
 {
-    cout << "pageSize : " << m_pageSize << endl;
-    return true;
+    MyAssert(m_root == 0, "Empty tree");
+
+    return 1;
 }
 
 /* Private methods */
 
-Uint CBTree::WritePage(Page const& page)
+void CBTree::InsertVal(Page & page, std::list<Uint>::iterator const& it, Uint const key, Uint const id)
 {
-    ofstream output(m_treeBoostPath.string(), ios::app | ios::binary);
-    MyAssert(!!output, "Index file lost!");
+    page.values.insert(it, 0);
+    page.values.insert(it, key);
+    page.values.insert(it, id);
 
-    output.seekp(0, ios::end);
+    if (page.values.size() > m_chunkCount)
+    {
+        Page page1, page2;
+        SplitPage(page, page1, page2);
+    }
+    else
+    {
+        WritePage(page, false);
+    }
+}
+
+void CBTree::SplitPage(Page & sourse, Page & res1, Page & res2)
+{
+    if (sourse.home == 0)
+    {
+        res1.home = sourse.home;
+
+    }
+
+    throw exception("page ololp");
+}
+
+Uint CBTree::WritePage(Page const& page, bool isNew)
+{
+    fstream output(m_treeBoostPath.string(), ios::binary | ios::in | ios::out);
+    MyAssert(output.is_open(), "Index file lost!");
+
+    if (isNew)
+        output.seekp(0, ios::end);
+    else
+        output.seekp(page.pos, ios::beg);
+
     Uint currPos = output.tellp();
     Uint listSize = page.values.size();
     output.write(reinterpret_cast<const char*>(&(page.home)), sizeof(page.home));
+    output.write(reinterpret_cast<const char*>(&(currPos)), sizeof(currPos));
     output.write(reinterpret_cast<const char*>(&(listSize)), sizeof(listSize));
 
     for (Uint num : page.values)
@@ -57,7 +133,7 @@ Uint CBTree::WritePage(Page const& page)
     }
 
     Uint zero = 0;
-    while (listSize++ <= m_chunkCount)
+    while (listSize++ < m_chunkCount)
     {
         output.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
     }
@@ -77,6 +153,7 @@ CBTree::Page CBTree::ReadPage(Uint const& pos)
     Page page;
     Uint count, i;
     input.read(reinterpret_cast<char*>(&page.home), sizeof(page.home));
+    input.read(reinterpret_cast<char*>(&page.pos), sizeof(page.pos));
     input.read(reinterpret_cast<char*>(&count), sizeof(count));
 
     while (count-- > 0)

@@ -24,6 +24,10 @@ int main(int argc, char* argv[])
     {
         CBTree tree(4);
         tree.Insert(14, 88);
+        tree.Insert(15, 98);
+        tree.Insert(13, 98);
+        tree.Insert(12, 98);
+        tree.Insert(16, 98);
     }
     catch (exception const& e)
     {
