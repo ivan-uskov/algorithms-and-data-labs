@@ -49,7 +49,7 @@ void CBTree::Insert(Uint const key, Uint const id)
                 continue;
             }
 
-            InsertVal(page, it, key, id);
+            InsertVal(page, it, { 0, key, id });
             return;
         }
 
@@ -64,7 +64,7 @@ void CBTree::Insert(Uint const key, Uint const id)
                 continue;
             }
 
-            InsertVal(page, it, key, id);
+            InsertVal(page, it, { 0, key, id });
             return;
         }
         else
@@ -76,23 +76,47 @@ void CBTree::Insert(Uint const key, Uint const id)
 
 Uint CBTree::Search(Uint const key)
 {
-    MyAssert(m_root == 0, "Empty tree");
+    MyAssert(m_root != 0, Error::EmptyTree);
 
-    return 1;
+    Page page = ReadPage(m_root);
+    auto it = page.values.begin();
+    while (1)
+    {
+        Uint link = *it++;
+        Uint cKey = *it++;
+        Uint cVal = *it++;
+
+        if (cKey == key) return cVal;
+
+        if (key < cKey)
+        {
+            MyAssert(link != 0, Error::KeyNotExists);
+            page = ReadPage(link);
+            it = page.values.begin();
+            continue;
+        }
+
+        if ((++it)-- == page.values.end())
+        {
+            MyAssert(*it != 0, Error::KeyNotExists);
+            page = ReadPage(*it);
+            it = page.values.begin();
+            continue;
+        }
+    }
 }
 
 /* Private methods */
 
-void CBTree::InsertVal(Page & page, std::list<Uint>::iterator const& it, Uint const key, Uint const id)
+void CBTree::InsertVal(Page & page, std::list<Uint>::iterator const& it, Element const& elt)
 {
-    page.values.insert(it, 0);
-    page.values.insert(it, key);
-    page.values.insert(it, id);
+    page.values.insert(it, elt.link);
+    page.values.insert(it, elt.key);
+    page.values.insert(it, elt.val);
 
     if (page.values.size() > m_chunkCount)
     {
-        Page page1, page2;
-        SplitPage(page, page1, page2);
+        SplitPage(page);
     }
     else
     {
@@ -100,21 +124,84 @@ void CBTree::InsertVal(Page & page, std::list<Uint>::iterator const& it, Uint co
     }
 }
 
-void CBTree::SplitPage(Page & sourse, Page & res1, Page & res2)
+void CBTree::SplitPage(Page & sourse)
 {
+    Page newPage;
+    Element middle = SplitVal(sourse, newPage);
+
     if (sourse.home == 0)
     {
-        res1.home = sourse.home;
-
+        newPage.pos = WritePage(newPage);
+        Page home = { 0, 0, { sourse.pos, middle.key, middle.val, newPage.pos } };
+        home.pos = WritePage(home);
+        m_root = home.pos;
+        WritePage(home, false);
+        newPage.home = home.pos;
+        WritePage(newPage, false);
+        sourse.home = home.pos;
+        WritePage(sourse, false);
+        return;
     }
 
-    throw exception("page ololp");
+    newPage.home = sourse.home;
+    newPage.pos = WritePage(newPage);
+
+    Page home = ReadPage(sourse.home);
+    auto it = home.values.begin();
+    while (1)
+    {
+        Uint link = *it++;
+        Uint cKey = *it++;
+        Uint cVal = *it++;
+        if (link == sourse.pos)
+        {
+            --(--it);
+            break;
+        }
+        if ((++it)-- == home.values.end())
+        {
+            MyAssert(*it == sourse.pos, Error::LinksCollision);
+            break;
+        }
+    }
+    home.values.insert(++it, middle.key);
+    home.values.insert(it, middle.val);
+    home.values.insert(it, newPage.pos);
+
+    if (home.values.size() > m_chunkCount)
+    {
+        SplitPage(home);
+    }
+    else
+    {
+        WritePage(home, false);
+    }
+}
+
+CBTree::Element CBTree::SplitVal(Page & sourse, Page & newPage)
+{
+    Uint valCount = (sourse.values.size() - 1) / 3;
+    Uint startElt = (valCount % 2 == 0) ? valCount / 2 : (valCount + 1) / 2;
+    auto it = sourse.values.begin();
+    list<Uint>::iterator eraseStart;
+
+    for (Uint i = 0; i < startElt * 3; ++i) ++it;
+    eraseStart = it;
+    for (; it != sourse.values.end(); ++it) newPage.values.push_back(*it);
+
+    sourse.values.erase(eraseStart, sourse.values.end());
+
+    Uint val = sourse.values.back();
+    sourse.values.pop_back();
+    Uint key = sourse.values.back();
+    sourse.values.pop_back();
+    return { 0, key, val };
 }
 
 Uint CBTree::WritePage(Page const& page, bool isNew)
 {
     fstream output(m_treeBoostPath.string(), ios::binary | ios::in | ios::out);
-    MyAssert(output.is_open(), "Index file lost!");
+    MyAssert(output.is_open(), Error::BtreeFileNotExists);
 
     if (isNew)
         output.seekp(0, ios::end);
@@ -144,11 +231,11 @@ Uint CBTree::WritePage(Page const& page, bool isNew)
 CBTree::Page CBTree::ReadPage(Uint const& pos)
 {
     ifstream input(m_treeBoostPath.string(), ios::binary);
-    MyAssert(!!input, "BTree file not exists!");
+    MyAssert(!!input, Error::BtreeFileNotExists);
 
     input.seekg(pos, ios::beg);
 
-    MyAssert(!!input, "Chunck not exists");
+    MyAssert(!!input, Error::ChunkNotExists);
 
     Page page;
     Uint count, i;
@@ -167,10 +254,10 @@ CBTree::Page CBTree::ReadPage(Uint const& pos)
 }
 
 
-void MyAssert(bool is, const char * str)
+void MyAssert(bool is, CBTree::Error const& err)
 {
     if (!is)
     {
-        throw exception(str);
+        throw err;
     }
 }
