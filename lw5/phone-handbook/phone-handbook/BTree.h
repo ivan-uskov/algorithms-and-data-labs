@@ -30,6 +30,7 @@ public:
 
     Uint Search(Uint const key);
     void Insert(Uint const key, Uint const id);
+    void Show(std::ostream & out, Uint level, Uint const pos = 0);
 
 private:
 

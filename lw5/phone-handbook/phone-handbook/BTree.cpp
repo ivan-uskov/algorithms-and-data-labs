@@ -3,7 +3,8 @@
 
 using namespace std;
 
-void MyAssert(bool is, const char * str);
+void MyAssert(bool is, CBTree::Error const& err);
+void PrintTabs(ostream & in, Uint count);
 
 CBTree::CBTree(Uint count)
     : m_pageCount(count)
@@ -20,6 +21,34 @@ CBTree::~CBTree()
 }
 
 /* Public methods */
+
+void CBTree::Show(ostream & out, Uint level, Uint const pos)
+{
+    MyAssert(m_root != 0, Error::EmptyTree);
+    if (pos == 0)
+    {
+        Show(out, level, m_root);
+        return;
+    }
+
+    Page page = ReadPage(pos);
+    auto it = page.values.begin();
+    while (1)
+    {
+        Uint link = *it++;
+        Uint cKey = *it++;
+        Uint cVal = *it++;
+        if (link != 0) Show(out, level + 1, link);
+        PrintTabs(out, level);
+        out << cKey << endl;
+
+        if ((++it)-- == page.values.end())
+        {
+            if (link != 0) Show(out, level + 1, *it);
+            break;
+        }
+    }
+}
 
 void CBTree::Insert(Uint const key, Uint const id)
 {
@@ -143,6 +172,7 @@ void CBTree::SplitPage(Page & sourse)
         return;
     }
 
+    WritePage(sourse, false);
     newPage.home = sourse.home;
     newPage.pos = WritePage(newPage);
 
@@ -155,7 +185,7 @@ void CBTree::SplitPage(Page & sourse)
         Uint cVal = *it++;
         if (link == sourse.pos)
         {
-            --(--it);
+            --(--(--it));
             break;
         }
         if ((++it)-- == home.values.end())
@@ -259,5 +289,13 @@ void MyAssert(bool is, CBTree::Error const& err)
     if (!is)
     {
         throw err;
+    }
+}
+
+void PrintTabs(ostream & in, Uint count)
+{
+    while (count-- > 0)
+    {
+        in << '\t';
     }
 }
